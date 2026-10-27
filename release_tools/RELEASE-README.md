@@ -20,6 +20,12 @@ script from that environment with `--output PATH --version YOUR_VERSION`.
 
 ## Required conversion engine and models — supplied separately
 
+Download the separate RVC engine archive:
+[RVC-beta.7z on Hugging Face](https://huggingface.co/lj1995/VoiceConversionWebUI/blob/main/RVC-beta.7z)
+(approximately 5.2 GB). Extract it with 7-Zip and select the extracted folder
+containing runtime/python.exe as Enhanced's RVC installation folder. Voice models
+must still be supplied separately.
+
 Neither ZIP includes voice models, retrieval indexes, neural network checkpoints,
 RVC engine/runtime, recordings, personal settings, experimental downloaded pitch
 models, or VB-CABLE. The bundled desktop runtime does not perform RVC inference.

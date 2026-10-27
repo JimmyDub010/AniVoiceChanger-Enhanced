@@ -25,6 +25,18 @@ per-voice settings, cancellable playback, and optional pitch calibration.
 experimental pretrained pitch models are included in this repository or release.**
 The portable ZIP bundles only the desktop Python runtime and its dependencies.
 
+### Download the RVC engine
+
+Get the separate engine archive here:
+**[Download RVC-beta.7z from Hugging Face](https://huggingface.co/lj1995/VoiceConversionWebUI/blob/main/RVC-beta.7z)**
+(approximately 5.2 GB).
+
+Extract the `.7z` archive with 7-Zip to its own folder. In Enhanced's
+**Conversion and Audio Routing** page, set **RVC installation folder** to the
+extracted engine folder containing `runtime/python.exe`. Voice models are still
+supplied separately; import your own `.pth` and optional `.index` files into
+Enhanced's Voice Library.
+
 The external RVC folder must contain `runtime/python.exe`, its inference
 dependencies (including PyTorch/CUDA, FAISS, fairseq, librosa and parselmouth),
 `vc_infer_pipeline.py`, `my_utils.py`, `infer_pack/models.py` or
