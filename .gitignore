@@ -1,0 +1,46 @@
+# Local environments, caches and generated releases
+.venv/
+.runtime/
+.cache/
+__pycache__/
+*.py[cod]
+dist/
+build/
+releases/
+test-results/
+*.egg-info/
+
+# Local user data and engine installations
+.env
+.env.*
+settings*.json
+settings*.tmp*
+diagnostics*.json
+VoiceLibrary/
+EnhancedData/
+outputs/
+audio/
+RVC*/
+runtime/
+experiments/
+_development/
+_preserved/
+.codex/
+.agents/
+.aws/
+
+# Models, archives and recordings must never enter source control
+*.pth
+*.pt
+*.index
+*.onnx
+*.safetensors
+*.ckpt
+*.h5
+*.zip
+*.7z
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.m4a
