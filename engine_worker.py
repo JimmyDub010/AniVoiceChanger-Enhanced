@@ -76,6 +76,8 @@ class Engine:
         import numpy as np
         import soundfile as sf
         import torch
+        call_started = time.perf_counter()
+        cpu_started = time.process_time()
         if not hasattr(self, 'vc'):
             raise ValueError('Load a model first.')
         if 'seed' in request:
@@ -94,8 +96,14 @@ class Engine:
             raise ValueError('This non-F0 model does not support pitch shifting. Set pitch to zero.')
         method = request.get('method', 'crepe')
         requested_method = method
-        if method not in ('crepe', 'pm', 'harvest', 'rmvpe', 'rmvpe-new', 'fcpe-experimental'):
+        experimental = ('mangio-crepe-80', 'rmvpe-range', 'hybrid-rmvpe-fcpe')
+        if method not in ('crepe', 'pm', 'harvest', 'rmvpe', 'rmvpe-new', 'fcpe-experimental', 'swiftf0') + experimental:
             raise ValueError('Unsupported pitch extraction method.')
+        if method in ('rmvpe-range', 'hybrid-rmvpe-fcpe'):
+            # Both adapters are explicitly based on the current RMVPE checkpoint.
+            if getattr(self, 'pitch_checkpoint', None) != 'classic' and hasattr(self.vc, 'model_rmvpe'):
+                del self.vc.model_rmvpe
+            self.pitch_checkpoint = 'classic'
         if method in ('rmvpe', 'rmvpe-new'):
             selected = 'new' if method == 'rmvpe-new' else 'classic'
             if getattr(self, 'pitch_checkpoint', None) != selected:
@@ -188,7 +196,8 @@ class Engine:
             voiced = mel > 0
             mel[voiced] = (mel[voiced] - low) * 254 / (high - low) + 1
             return np.rint(np.clip(mel, 1, 255)).astype(np.int64)
-        if requested_method == 'fcpe-experimental' and self.f0:
+        fcpe_pitch = None
+        if requested_method in ('fcpe-experimental', 'hybrid-rmvpe-fcpe') and self.f0:
             if not hasattr(self, 'fcpe'):
                 import hashlib
                 package_root = Path(__file__).resolve().parent / 'experiments/fcpe/packages'
@@ -203,7 +212,21 @@ class Engine:
                                           interp_uv=False, output_interp_target_length=length).reshape(-1).detach().cpu().numpy()
                 frequency = frequency * (2 ** (shift / 12))
                 return coarse_pitch(frequency), frequency
-            pitch_function = fcpe_pitch
+            if requested_method == 'fcpe-experimental':
+                pitch_function = fcpe_pitch
+                self.vc.get_f0 = pitch_function
+        adapter_details = {}
+        if requested_method == 'swiftf0' and self.f0:
+            from swiftf0_adapter import adapter as swift_adapter
+            pitch_function = swift_adapter(self)
+            self.vc.get_f0 = pitch_function
+            adapter_details = {'adapter': 'swiftf0', 'version': '0.3.0', 'provider': 'CPUExecutionProvider',
+                               'confidence_threshold': .5, 'input_rate': 16000, 'native_hop_seconds': .016,
+                               'rvc_hop_seconds': .01, 'f0_min': 50, 'f0_max': 1100}
+        if requested_method in experimental:
+            from pitch_methods import adapter
+            pitch_function, adapter_details = adapter(self, requested_method, original_f0,
+                                                       request.get('pitch_lab_options', {}), fcpe_pitch)
             self.vc.get_f0 = pitch_function
         if effects['singing_mode'] and effects['pitch_correction'] and effects['correction_strength']:
             def corrected_f0(*args, **kwargs):
@@ -211,6 +234,27 @@ class Engine:
                 frequency = correct_pitch(frequency, effects)
                 return coarse_pitch(frequency), frequency
             self.vc.get_f0 = corrected_f0
+        pitch_metrics = {'seconds': 0., 'calls': 0}
+        measured_pitch = self.vc.get_f0
+        def measure_pitch(*args, **kwargs):
+            torch.cuda.synchronize()
+            began = time.perf_counter()
+            value = measured_pitch(*args, **kwargs)
+            torch.cuda.synchronize()
+            pitch_metrics['seconds'] += time.perf_counter() - began
+            pitch_metrics['calls'] += 1
+            frequency = np.asarray(value[1])
+            pad = self.vc.x_pad * 100
+            central = frequency[pad:-pad] if pad and len(frequency) > pad * 2 else frequency
+            valid = np.isfinite(central) & (central > 0)
+            voiced = central[valid]
+            pitch_metrics.update(frames=int(len(central)), voiced_fraction=float(valid.mean()) if len(central) else 0.,
+                                 invalid_frames=int((~np.isfinite(central)).sum()),
+                                 median_hz=float(np.median(voiced)) if len(voiced) else None,
+                                 abrupt_octave_transitions=int(np.sum(np.abs(np.diff(np.log2(np.maximum(central, 1e-6))))[valid[1:] & valid[:-1]] > 1)) if len(central) > 1 else 0,
+                                 scope='F0 time includes reflected inference padding; statistics exclude that padding. Voicing transitions are not necessarily errors.')
+            return value
+        if request.get('measure_pitch', False): self.vc.get_f0 = measure_pitch
         try:
             if audited_index is not None:
                 faiss.read_index = lambda path: audited_index
@@ -245,6 +289,10 @@ class Engine:
                 'output_seconds': len(result) / self.rate, 'processing_seconds': time.perf_counter() - start,
                 'pipeline_stage_seconds': timings,
                 'peak_vram_bytes': torch.cuda.max_memory_allocated(),
+                'peak_reserved_vram_bytes': torch.cuda.max_memory_reserved(),
+                'total_conversion_seconds': time.perf_counter() - call_started,
+                'cpu_seconds': time.process_time() - cpu_started,
+                'pitch_metrics': pitch_metrics, 'adapter_details': adapter_details,
                 'latency_note': 'File processing measurement; not microphone-to-output latency.'}
 
 

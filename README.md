@@ -1,193 +1,135 @@
 # AniVoiceChanger Enhanced
 
-An NVDA-accessible Windows application for recording your microphone, converting
-speech with an RVC voice model, and playing the result through headphones or a
-virtual audio cable. This is **record, then convert, then play** push-to-talk;
-it is not a continuous real-time voice filter.
+Native Windows RVC record-and-convert voice changer with a saved voice library,
+global F8 push-to-talk, named controls, NVDA status announcements, and an
+Experimental Pitch Lab. Based on [AniVoiceChanger](https://github.com/SociallyIneptWeeb/AniVoiceChanger).
 
-Based on [AniVoiceChanger by SociallyIneptWeeb](https://github.com/SociallyIneptWeeb/AniVoiceChanger).
-Enhanced adds a persistent voice library, resilient global push-to-talk,
-per-voice settings, cancellable playback, and optional pitch calibration.
+## Download and install
 
-## What you need
+Download **AniVoiceChanger-Enhanced-2026.10.30-Windows-x64.zip** from
+[GitHub Releases](https://github.com/JimmyDub010/AniVoiceChanger-Enhanced/releases/tag/v2026.10.30).
+Extract the entire ZIP to a short, writable path such as `C:\AniVoiceChanger`.
+Run **Launch-Enhanced.cmd**. Keep the `app` and `runtime` folders beside it.
+Desktop Python is included: no system Python, pip, paid service or developer
+tools are needed to run the portable desktop application.
 
-- Windows x64 and a physical microphone; NVDA for spoken accessibility feedback.
-- **Your own compatible legacy RVC beta0717 engine installation.** The latest
-  RVC engine has not been validated with this adapter. RVC v1 and v2 voice models
-  are supported; model version and engine release are different things.
-- **Your own RVC voice models** (`.pth`) and optional matching `.index` files.
-- An NVIDIA GPU and compatible drivers for the tested CUDA inference path.
-  Development testing used an RTX 4070 SUPER with CUDA PyTorch 2.0.0+cu118.
-  CPU-only inference has not been validated.
-- Optional VB-CABLE, installed separately, for Discord or game voice chat.
+**A compatible legacy RVC engine and your own voice models are required separately.**
+The ZIP includes the desktop application and pitch support assets, not an RVC
+engine installer. Full RVC conversion requires an NVIDIA CUDA-capable GPU and
+compatible driver. Tested on Windows 11, RTX 4070 SUPER 12 GB, legacy Python
+3.9.13 / PyTorch 2.0.0+cu118 and RVC v1/v2 F0 models.
 
-**No RVC engine, voice models, retrieval indexes, HuBERT/RMVPE checkpoints, or
-experimental pretrained pitch models are included in this repository or release.**
-The portable ZIP bundles only the desktop Python runtime and its dependencies.
+1. Obtain the [legacy RVC-beta engine archive](https://huggingface.co/lj1995/VoiceConversionWebUI/blob/e6d0c1a17da07c33557852f9dfa2bd44cc75737d/RVC-beta.7z).
+   Extract it separately with 7-Zip. Select its folder containing
+   `runtime/python.exe` in **RVC installation folder**. It must contain legacy
+   `vc_infer_pipeline.py`, inference architecture modules, HuBERT and native
+   RMVPE/CREPE assets and dependencies. The Python 3.12 RVC20260718 engine is not
+   a drop-in replacement.
+2. In Voice Library, choose **Import Voice from ZIP** or **Import Extracted Voice**.
+   Select your trusted `.pth` and optional matching `.index`. Nested ZIP folders
+   are searched; ambiguous pairings require selection. Imported copies become
+   `model.pth` / `model.index` in unique library directories. Original downloads
+   are not renamed, overwritten or deleted. After successful import, the source
+   ZIP is no longer required.
+3. Choose a Saved Voice, wait for Ready, and select your named physical microphone
+   and playback device. Pitch, index influence and extraction settings are saved
+   per voice and survive switching/restarts.
+4. Enable the global hotkey. Hold **F8**, speak, then release to convert and play.
+   The configurable key works outside the app subject to Windows/application hook
+   restrictions. Do not run multiple copies with competing hotkeys.
 
-### Download the RVC engine
+Voice models are not supplied. Obtain appropriate rights/permissions for models
+and recordings. Removing a library entry does not delete imported files; file
+deletion is a separate confirmed action.
 
-Get the separate engine archive here:
-**[Download RVC-beta.7z from Hugging Face](https://huggingface.co/lj1995/VoiceConversionWebUI/blob/main/RVC-beta.7z)**
-(approximately 5.2 GB).
+## Pitch extractors and devices
 
-Extract the `.7z` archive with 7-Zip to its own folder. In Enhanced's
-**Conversion and Audio Routing** page, set **RVC installation folder** to the
-extracted engine folder containing `runtime/python.exe`. Voice models are still
-supplied separately; import your own `.pth` and optional `.index` files into
-Enhanced's Voice Library.
-
-The external RVC folder must contain `runtime/python.exe`, its inference
-dependencies (including PyTorch/CUDA, FAISS, fairseq, librosa and parselmouth),
-`vc_infer_pipeline.py`, `my_utils.py`, `infer_pack/models.py` or
-`lib/infer_pack/models.py`, and the engine's required `hubert_base.pt` and
-`rmvpe.pt` assets. Obtain these separately under their respective licenses.
-Downloaded experimental RMVPE New and FCPE assets are excluded. Use standard
-RMVPE unless you separately supply the exact supported experimental assets.
-
-## Install the portable app
-
-1. Download the Windows x64 portable ZIP from [Releases](https://github.com/JimmyDub010/AniVoiceChanger-Enhanced/releases/latest).
-2. Extract the **entire ZIP** to a writable folder.
-3. Run `Launch-Enhanced.cmd`. Keep the `runtime` and `app` folders beside it.
-   You do not need a separate desktop Python installation.
-4. In **Conversion and Audio Routing**, browse to your compatible RVC engine.
-5. Choose your physical microphone, playback destination, and optional headphone
-   monitoring destination. Device selections persist by Windows endpoint ID.
-6. Import and select a voice as described below, then enable global F8.
-
-This is a portable Python application, not an installer or a standalone EXE.
-Do not install it inside a protected read-only directory. Its library, settings,
-cache and converted outputs are created inside the `app` folder. Keep backups
-of your own voice library before replacing an installation.
-
-## Run from source
-
-Install Python **3.10 x64**, clone or download this repository, and run
-`Setup.cmd`. Setup creates `.venv` and installs `requirements.txt`; it needs
-internet access. Then run `Launch-Enhanced.cmd`.
-
-Alternatively, from PowerShell in the repository:
-
-```powershell
-py -3.10 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe -B enhanced.py
-```
-
-The external RVC engine remains required for conversion. Source installation
-does not install or download an engine or any voice models.
-
-## NVDA and keyboard controls
-
-Native Windows controls expose accessible names. Status, recording, processing,
-success and error announcements use `accessible_output2` with NVDA.
-
-| Key or action | Behavior |
+| Method | Installed extraction device |
 | --- | --- |
-| Tab / Shift+Tab | Navigate controls in the current page or dialog |
-| Ctrl+Tab / Ctrl+Shift+Tab | Switch Voice Library and Conversion and Audio Routing |
-| Up / Down in Saved Voices | Select a voice; the latest request wins during rapid navigation |
-| Hold F8, then release | Record the real microphone, then convert and play, after enabling the global hotkey |
-| Escape in Enhanced | Cancel an active recording without conversion or playback |
-| Alt+P in the main window | Open Auto Pitch Calibration for the loaded saved voice |
+| RMVPE current | GPU only |
+| RMVPE New | GPU only |
+| CREPE Full | GPU only |
+| FCPE Experimental | GPU only |
+| Mangio-style CREPE Full hop 80 Experimental | GPU only |
+| RMVPE constrained range Experimental | GPU only |
+| RMVPE + FCPE agreement hybrid Experimental | GPU only |
+| Praat autocorrelation | CPU only |
+| Harvest | CPU only |
+| SwiftF0 0.3.0 | CPU only |
 
-The **Active voice** label confirms the successfully loaded model, separately
-from the highlighted Saved Voices choice. Loading failures leave no active voice.
-Pitch and index controls remain available during capture and processing; changes
-apply to the next utterance. Completion restores the original control rather than
-moving focus to status. Background completion does not take focus from another app.
+**CPU pitch extraction is not CPU voice conversion. Full conversion still
+requires NVIDIA CUDA, including with Praat, Harvest or SwiftF0.** Labels describe
+Enhanced's actual integration, not theoretical upstream library capabilities.
+AMD/Intel GPU synthesis and CPU-only synthesis are not supported by this adapter.
 
-## F8 recording and audio routing
+The ZIP bundles SwiftF0 0.3.0's licensed ONNX model/private CPU runtime, the tested
+RMVPE New checkpoint, and FCPE's tested checkpoint/private packages. Native
+methods depend on the separately supplied supported RVC engine's assets.
+Existing PyTorch/NumPy/ONNX Runtime installations are not upgraded by the app.
+See PITCH-DEVICE-SUPPORT.md in the portable ZIP's app folder or source root.
 
-After the model loads, select **Enable push-to-talk hotkey**. Global F8 works
-outside Enhanced, including while minimized. Hold to record your microphone;
-release to stop, convert and play to your selected output. Key-repeat suppression,
-missed-release recovery and recording limits protect against stuck recording.
-The hotkey also reaches the foreground application. Close or disable hotkeys in
-other AniVoiceChanger instances to avoid duplicate capture and playback.
+## Keyboard operation and screen readers
 
-For local listening, choose physical headphones as playback. For voice chat,
-choose **CABLE Input** as Enhanced's playback destination, optionally choose
-physical headphones for monitoring, and select **CABLE Output** as the microphone
-inside Discord or your game. Monitoring plays the converted result.
+- Tab / Shift+Tab navigate native controls; arrows operate dropdowns.
+- Ctrl+Tab / Ctrl+Shift+Tab switch the library and routing pages.
+- F8 holds recording and releases to convert when enabled. Toggle recording is
+  optional. Escape cancels recording while Enhanced has focus. A safety timeout
+  bounds capture.
+- Alt+L opens **Experimental Pitch Lab**: choose a saved voice and one recording
+  or audio file, select methods and run identical-setting comparisons. Results
+  are saved separately and can be reopened, read and previewed. Cancel stops
+  the private comparison worker. Saving a favorite is explicit; experimenting
+  does not change preferences. F8 is paused while the Lab is open.
+- Alt+P opens optional pitch calibration. Recommendations are experimental;
+  select by listening rather than assuming a numerical ranking is best.
 
-Unavailable devices are reported explicitly. Microphone failure or silence is
-reported as an error; production never substitutes synthetic speech. Output files
-are saved in `outputs`. Engine diagnostics are written locally to `.cache`.
+Controls have native accessible names. Status uses accessible_output2 for NVDA
+speech/braille when available. Automated checks cover full extraction labels
+through Windows MSAA, actionable control names, native navigation, focus and
+cancellation. **Actual NVDA speech verification remains manual when NVDA is
+unavailable; API checks alone do not prove full usability.** Check tab order,
+full method/device names, Ready/error announcements, import dialogs, Lab
+progress/cancel and playback with your NVDA configuration.
 
-## Import and manage voices
+## Discord and game routing
 
-On **Voice Library**, use **Import Voice from ZIP** or **Import Extracted Voice**.
-Imports are copied into the selected library; original downloads are retained.
-ZIP importing pairs compatible `.pth` and `.index` files automatically where the
-choice is unambiguous and asks you when multiple candidates need selection.
-Extracted imports accept a model and optional index through file dialogs.
+VB-CABLE is optional and installed separately. Choose **CABLE Input** as Enhanced's
+converted playback destination and **CABLE Output** as Discord/PlayAural/game's
+microphone. Select physical headphones for independent monitoring. Windows
+endpoint IDs are saved instead of temporary device numbers. Speaker playback
+is not a microphone endpoint. Enhanced does not install drivers or change
+Windows default devices. Local playback works without VB-CABLE; Lab previews
+are restricted to physical monitoring rather than chat cable.
 
-Saved Voices supports rename, Edit Voice Settings, relinking missing files,
-removing entries while keeping imported files, and explicit confirmed deletion
-of imported library copies. Pitch, extraction method, index influence and effects
-are stored per voice. Selecting FCPE for one voice does not replace another
-voice's saved RMVPE choice. Switching back or restarting restores the saved method;
-older entries without a method inherit the current selection on first load.
+## Limitations and verification
 
-Voice changes invalidate stale conversion/playback generations and wait for
-in-use workers before replacement. Saved models are not mixed together.
+- Batch push-to-talk is supported. **Continuous real-time microphone conversion
+  is not a released feature.** Isolated prototypes are excluded; inference time
+  is not end-to-end microphone latency.
+- Actual v1/v2 conversions, index participation, pitch 0/-12/+12, persistence,
+  cancellation/recovery and clean-folder portable launch/conversion were tested.
+  All ten methods were exercised. Generated speech does not establish a quality
+  winner; SwiftF0 is not advertised as better than RMVPE.
+- A second Windows computer, every model, physical game/anti-cheat behavior and
+  full NVDA auditory acceptance are not universally verified.
+- Non-F0 voices cannot pitch-shift. Unsupported architectures/indexes report
+  errors. Newest upstream RVC engines are not automatically compatible.
+- Use a short writable path: deep nesting can exceed Windows DLL limits. App data
+  is created beside the app's Python files. Keep old installations/backups
+  separately; this release does not migrate or replace Classic or its fallback.
 
-## Optional Auto Pitch Calibration
+## Source, licenses and checksums
 
-Load a saved voice and select a physical headphone monitoring destination first.
-Open **Auto Pitch Calibration** on Voice Library or press Alt+P.
+The optional **Source.zip** contains application source and reviewed pitch
+bundles; Setup.cmd requires Python 3.10 and internet for desktop dependencies.
+GitHub's automatic source archives contain tracked source, not prebuilt native
+dependencies/model bundles. Use the Windows ZIP to run.
 
-1. **Record Calibration Sample** (Alt+R): speak naturally for six seconds into
-   your actual microphone.
-2. **Analyze Voice** (Alt+A): inspect median fundamental frequency, central pitch
-   range, voiced-frame fraction and clipping. Insufficient voiced speech produces
-   an error so you can record a clearer sample.
-3. Optionally choose a known target-speaker reference recording, 1–15 seconds,
-   with Alt+F; clear it with Alt+L. No target pitch is inferred from gender, model
-   filenames or checkpoint tensors.
-4. **Find Recommended Pitches** (Alt+P in this dialog): convert the same sample
-   at several shifts, including zero. Comparisons use dry conversion with musical
-   pitch correction off. Repeated comparisons reuse the session cache.
-5. Select a candidate with arrows and **Preview Selected Candidate** (Alt+V).
-   Previews use only the chosen physical monitoring device, never a virtual cable
-   or the chat output. Playback cannot overlap.
-6. **Save Pitch for This Voice** (Alt+S) to persist your listening choice without
-   replacing the voice's other preferences.
-7. **Cancel Calibration** or Escape closes the workflow. In-flight work finishes
-   safely before resources and temporary audio are released. Global F8 is paused
-   during calibration and available afterward if previously enabled.
+Original AniVoiceChanger MIT attribution is retained. Dependencies retain their
+licenses/notices; see LICENSE, THIRD-PARTY-NOTICES.txt and ACKNOWLEDGMENTS.md.
+The external RVC engine has its own notices. Personal voices, indexes,
+recordings, settings, credentials and development snapshots are excluded.
+Reviewed pitch support weights are not personal voice models.
 
-Pitch ranking is **experimental**. Praat/parselmouth pitch estimates can have
-octave errors. Clipping, voiced-speech retention, pitch tracking and optional
-reference matching are technical measurements, not a guarantee of naturalness or
-an AI confidence score. Your listening assessment determines the best shift.
-There is no voice-model retraining. Saved calibration stores numerical analysis;
-temporary raw recordings and candidate audio are removed when the dialog closes.
-
-## Tests and building releases
-
-```powershell
-.\.venv\Scripts\python.exe -B -m unittest discover -s tests
-.\.venv\Scripts\python.exe -B release_tools\build_release.py --output dist --version YOUR_VERSION
-```
-
-The current release passed 52 automated regression tests, real FCPE/RMVPE
-conversion and method-switching tests before and after restart, rapid-switch
-protection, portable startup, focus checks and archive integrity checks on the
-development Windows system. Unit tests create small synthetic validation fixtures
-locally; no personal or trained models are committed. Clean-machine compatibility,
-recipient-supplied engines, hardware and subjective listening still need testing.
-
-The build helper produces a model-free Windows portable ZIP and a separate source
-ZIP, each with a SHA-256 file manifest. Release assets include checksums. Generated
-files, local settings, models, recordings and test output are ignored by Git.
-
-## License and attribution
-
-Licensed under the **MIT License**, matching the original AniVoiceChanger project.
-The original `Copyright (c) 2023 SociallyIneptWeeb` notice is retained in
-[LICENSE](LICENSE). Bundled desktop dependencies retain their own licenses and
-notices in the portable release. External RVC engines and voice models have their
-own licenses and are not redistributed here.
+Verify the ZIP using **SHA256SUMS.txt** or **release-checksums.json**.
+Each ZIP also contains SHA256-MANIFEST.json for its contents.

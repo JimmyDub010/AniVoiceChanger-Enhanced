@@ -83,8 +83,10 @@ class GlobalKeyBridge:
         self.vk = ctypes.windll.user32.MapVirtualKeyW(scans[0], 1)
         if not self.vk: raise ValueError('This key cannot be monitored reliably on Windows.')
         try:
-            self.hooks.append(keyboard.on_press_key(key, lambda event: self.dispatch(self.controller.event, 'down'), suppress=False))
-            self.hooks.append(keyboard.on_release_key(key, lambda event: self.dispatch(self.controller.event, 'up'), suppress=False))
+            # One registration owns both transitions. Two hook_key registrations
+            # for one key overwrite keyboard's shared removal entry and can raise
+            # KeyError on disable/close after the first callback is unregistered.
+            self.hooks.append(keyboard.hook_key(key, lambda event: self.dispatch(self.controller.event, event.event_type), suppress=False))
             self.controller.enable(toggle)
         except Exception:
             self.disable()

@@ -19,6 +19,7 @@ from global_hotkeys import CaptureKeys, GlobalKeyBridge
 from audio_effects import settings as effect_settings
 from routing import playback_many
 from activity import Generations
+from pitch_methods import DEVICE_NOTE
 
 ROOT = Path(__file__).resolve().parent
 
@@ -37,11 +38,15 @@ class Enhanced(Workbench):
         self.loading_voice = None
         self.switch_timer = None
         self.calibration = None
+        self.pitch_lab = None
+        self.pitch_lab_open = False
         try: self.extra = json.loads(desktop.SETTINGS.read_text(encoding='utf-8'))
         except (ValueError, OSError): self.extra = {}
         super().__init__()
         self.SetTitle('AniVoiceChanger Enhanced — Voice Library and Push-to-Talk')
         self.book = wx.Notebook(self)
+        self.book.SetName('Application pages')
+        self.book.SetAccessible(NamedAccessible(self.book, 'Application pages'))
         self.panel.Reparent(self.book)
         self.library_panel = ScrolledPanel(self.book)
         self.library_layout = wx.BoxSizer(wx.VERTICAL)
@@ -72,6 +77,9 @@ class Enhanced(Workbench):
         calibration_button = wx.Button(self.library_panel, label='Auto &Pitch Calibration')
         calibration_button.Bind(wx.EVT_BUTTON, self.open_calibration)
         self.library_layout.Add(calibration_button, 0, wx.EXPAND | wx.ALL, 8)
+        lab_button = wx.Button(self.library_panel, label='Experimental Pitch &Lab (Alt+L)')
+        lab_button.Bind(wx.EVT_BUTTON, self.open_pitch_lab)
+        self.library_layout.Add(lab_button, 0, wx.EXPAND | wx.ALL, 8)
         self.book.AddPage(self.library_panel, 'Voice Library', select=True)
         self.book.AddPage(self.panel, 'Conversion and Audio Routing')
         self.library_panel.SetupScrolling(scroll_x=False)
@@ -84,6 +92,9 @@ class Enhanced(Workbench):
         layout.Add(self.global_status, 0, wx.EXPAND | wx.ALL, 8)
         self.SetSizer(layout)
         self.method.SetItems(METHOD_LABELS)
+        note = wx.StaticText(self.panel, label=DEVICE_NOTE)
+        note.Wrap(710)
+        self.layout.Insert(0, note, 0, wx.EXPAND | wx.ALL, 8)
         self.method.SetStringSelection(method_label(self.extra.get('method', 'rmvpe')))
         self.method.Unbind(wx.EVT_CHOICE)
         self.method.Bind(wx.EVT_CHOICE, self.method_changed)
@@ -131,7 +142,11 @@ class Enhanced(Workbench):
         self.settings['method'] = method_key(self.method.GetStringSelection())
         self.settings['toggle_record'] = self.toggle_record.GetValue() if hasattr(self, 'toggle_record') else self.extra.get('toggle_record', False)
         if self.library: self.settings['library_root'] = str(self.library.root)
-        atomic_json(desktop.SETTINGS, self.settings)
+        try:
+            atomic_json(desktop.SETTINGS, self.settings)
+        except OSError as error:
+            self.announce('Could not save settings: ' + str(error))
+            return
         if self.library and self.current_voice:
             try:
                 voice = self.library.get(self.current_voice)
@@ -227,7 +242,7 @@ class Enhanced(Workbench):
         self.request_voice(self.selected_voice()['id'])
 
     def request_voice(self, voice_id):
-        if self.calibration:
+        if self.calibration or getattr(self, 'pitch_lab_open', False) is True:
             self.announce('Close calibration before switching voices.')
             self.refresh_library()
             return
@@ -326,6 +341,10 @@ class Enhanced(Workbench):
         result['method'] = method_key(result['method'])
         result['effects'] = effect_settings(self.effects)
         result['_generation'] = self.generations.snapshot()[0]
+        if self.active_voice:
+            options = self.library.get(self.active_voice)['preferences'].get('method_options', {})
+            if options.get('method') == result['method']:
+                result['pitch_lab_options'] = {k: v for k, v in options.items() if k != 'method'}
         return result
 
     def converted_playback(self, source, settings, destinations):
@@ -491,7 +510,7 @@ class Enhanced(Workbench):
         self.save()
 
     def hotkey_ready(self):
-        if self.busy or self.recorder or self.calibration or self.pending_voice or self.loading_voice: return False
+        if self.busy or self.recorder or self.calibration or getattr(self, 'pitch_lab_open', False) is True or self.pending_voice or self.loading_voice: return False
         try:
             self.conversion_settings(); self.destinations()
             return True
@@ -503,7 +522,7 @@ class Enhanced(Workbench):
         return self.recorder is not None
 
     def begin_recording(self, event=None):
-        if self.calibration:
+        if self.calibration or getattr(self, 'pitch_lab_open', False) is True:
             self.announce('Close calibration before normal recording.')
             return
         if self.IsActive() and not self.busy and not self.recorder and hasattr(self, 'book'):
@@ -522,6 +541,8 @@ class Enhanced(Workbench):
             self.announce(self.book.GetPageText(self.book.GetSelection()))
         elif key == ord('P') and event.AltDown():
             self.open_calibration()
+        elif key == ord('L') and event.AltDown():
+            self.open_pitch_lab()
         elif key == wx.WXK_TAB and wx.Window.FindFocus() == self:
             (self.saved_voices if self.book.GetSelection() == 0 else self.engine).SetFocus()
         elif key == wx.WXK_ESCAPE and self.recorder:
@@ -569,6 +590,10 @@ class Enhanced(Workbench):
         super().check_recording(event)
 
     def close(self, event):
+        if getattr(self, 'pitch_lab_open', False) is True:
+            self.announce('Close Experimental Pitch Lab before closing Enhanced.')
+            event.Veto()
+            return
         if self.calibration:
             self.announce('Close calibration before closing Enhanced.')
             event.Veto()
@@ -581,7 +606,7 @@ class Enhanced(Workbench):
         super().close(event)
 
     def open_calibration(self, event=None):
-        if self.busy or self.recorder or not self.active_voice:
+        if self.busy or self.recorder or not self.active_voice or self.pitch_lab_open:
             self.announce('Load a saved voice and finish the current operation first.')
             return
         from calibration_dialog import CalibrationDialog
@@ -591,6 +616,28 @@ class Enhanced(Workbench):
         finally:
             self.calibration = None
             dialog.Destroy()
+
+    def open_pitch_lab(self, event=None):
+        if self.busy or self.recorder or self.calibration or self.pitch_lab_open or self.pending_voice or self.loading_voice:
+            self.announce('Finish the current operation before opening Experimental Pitch Lab.')
+            return
+        if not self.library or not self.library.voices():
+            self.announce('Import a saved voice before opening Experimental Pitch Lab.')
+            return
+        from pitch_lab_dialog import PitchLabDialog
+        self.pitch_lab_open = True
+        dialog = None
+        try:
+            dialog = PitchLabDialog(self)
+            self.pitch_lab = dialog
+            dialog.ShowModal()
+        except Exception as error:
+            self.announce('Cannot open Pitch Lab: ' + str(error))
+        finally:
+            self.pitch_lab = None
+            self.pitch_lab_open = False
+            if dialog: dialog.Destroy()
+            self.announce('Pitch Lab closed. Saved audio was kept; global F8 is available again if enabled.')
 
 
 if __name__ == '__main__':

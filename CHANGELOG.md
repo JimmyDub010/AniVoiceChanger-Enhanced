@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026.10.30
+
+- SwiftF0 0.3.0, Experimental Pitch Lab, and consistent CPU/GPU extraction labels.
+- Reviewed pitch asset bundles and retained attribution; no personal voice assets.
+- Release-blocking page-name, atomic-save and global hook cleanup fixes.
+- 74 regression tests, v1/v2 real inference, MSAA control checks and direct F8 verification.
+- Full synthesis still requires NVIDIA CUDA; NVDA auditory verification remains manual.
+
 ## 2026.10.27
 
 Initial public AniVoiceChanger Enhanced release, based on AniVoiceChanger.

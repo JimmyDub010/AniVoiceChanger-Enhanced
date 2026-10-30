@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 from queue import Empty, Queue
 import subprocess
-from threading import Lock, Thread
+from threading import Lock, Thread, current_thread
 
 ROOT = Path(__file__).resolve().parent
 
@@ -16,6 +16,7 @@ class EngineClient:
         if not python.is_file():
             raise ValueError('The selected RVC installation has no runtime/python.exe.')
         self.lock = Lock()
+        self.close_lock = Lock()
         self.responses = Queue()
         cache = ROOT / '.cache'
         cache.mkdir(exist_ok=True)
@@ -28,13 +29,16 @@ class EngineClient:
             cwd=self.folder, env=environment, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=self.log, encoding='utf-8', creationflags=subprocess.CREATE_NO_WINDOW)
         def read():
-            for line in self.process.stdout:
-                try:
-                    self.responses.put(json.loads(line))
-                except ValueError:
-                    self.responses.put({'ok': False, 'error': 'Unexpected output from RVC worker. See .cache/engine.log.'})
-            self.responses.put({'ok': False, 'error': 'RVC worker exited. See .cache/engine.log.'})
-        Thread(target=read, daemon=True).start()
+            try:
+                for line in self.process.stdout:
+                    try:
+                        self.responses.put(json.loads(line))
+                    except ValueError:
+                        self.responses.put({'ok': False, 'error': 'Unexpected output from RVC worker. See .cache/engine.log.'})
+            finally:
+                self.responses.put({'ok': False, 'error': 'RVC worker exited or was cancelled. See .cache/engine.log.'})
+        self.reader = Thread(target=read, daemon=True)
+        self.reader.start()
         if not self.receive(30).get('ready'):
             self.close()
             raise RuntimeError('RVC worker did not become ready.')
@@ -58,16 +62,15 @@ class EngineClient:
             return response['result']
 
     def close(self):
-        if hasattr(self, 'process') and self.process.poll() is None:
-            self.process.terminate()
-            try:
-                self.process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                self.process.kill()
-                self.process.wait()
-        if hasattr(self, 'process'):
-            for pipe in (self.process.stdin, self.process.stdout):
-                if pipe:
-                    pipe.close()
-        if hasattr(self, 'log'):
-            self.log.close()
+        with self.close_lock:
+            if hasattr(self, 'process') and self.process.poll() is None:
+                try: self.process.terminate()
+                except OSError: pass
+                try: self.process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    self.process.kill(); self.process.wait()
+            if hasattr(self, 'reader') and self.reader is not current_thread(): self.reader.join(timeout=1)
+            if hasattr(self, 'process'):
+                for pipe in (self.process.stdin, self.process.stdout):
+                    if pipe and not pipe.closed: pipe.close()
+            if hasattr(self, 'log') and not self.log.closed: self.log.close()

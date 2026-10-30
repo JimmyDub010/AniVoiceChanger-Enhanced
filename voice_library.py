@@ -9,6 +9,7 @@ import re
 import shutil
 import stat
 import struct
+import time
 from uuid import uuid4
 from zipfile import BadZipFile, ZipFile
 
@@ -21,7 +22,8 @@ MAX_RATIO = 200
 AUTO = 'automatic'
 CATEGORIES = ['Singer', 'Wrestler', 'Character', 'Announcer', 'Other']
 USAGES = ['Talking', 'Singing', 'Both', 'Unknown']
-METHODS = ['rmvpe', 'crepe', 'rmvpe-new', 'pm', 'harvest', 'fcpe-experimental']
+METHODS = ['rmvpe', 'crepe', 'rmvpe-new', 'pm', 'harvest', 'fcpe-experimental',
+           'mangio-crepe-80', 'rmvpe-range', 'hybrid-rmvpe-fcpe', 'swiftf0']
 
 
 class SelectionRequired(ValueError):
@@ -45,7 +47,15 @@ def atomic_json(path, value):
             json.dump(value, stream, ensure_ascii=False, indent=2)
             stream.flush()
             os.fsync(stream.fileno())
-        os.replace(temporary, path)
+        # Windows scanners/readers can briefly deny replacement of a valid file.
+        # Retain atomic replacement and bound the retry rather than corrupting it.
+        for attempt in range(4):
+            try:
+                os.replace(temporary, path)
+                break
+            except PermissionError:
+                if attempt == 3: raise
+                time.sleep(.025 * (attempt + 1))
     finally:
         temporary.unlink(missing_ok=True)
 

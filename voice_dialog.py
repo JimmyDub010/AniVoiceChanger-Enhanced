@@ -5,19 +5,23 @@ from wx.lib.scrolledpanel import ScrolledPanel
 from desktop import NamedAccessible
 from voice_library import CATEGORIES, USAGES, METHODS
 from audio_effects import DEFAULTS, KEYS, SCALES, settings
+from pitch_methods import LABELS, DEVICE_NOTE
 
-METHOD_LABELS = ['rmvpe', 'crepe', 'RMVPE New', 'pm', 'harvest', 'FCPE Experimental']
+METHOD_LABELS = [LABELS[key] for key in METHODS]
+LEGACY_LABELS = {'RMVPE New': 'rmvpe-new', 'FCPE Experimental': 'fcpe-experimental',
+                 'Mangio-style CREPE 80 Experimental': 'mangio-crepe-80', 'RMVPE Range Experimental': 'rmvpe-range',
+                 'RMVPE + FCPE Hybrid Experimental': 'hybrid-rmvpe-fcpe', 'SwiftF0 0.3.0 (CPU)': 'swiftf0'}
 
 
 def method_key(label):
-    key = {'RMVPE New': 'rmvpe-new', 'FCPE Experimental': 'fcpe-experimental'}.get(label, label)
+    key = {value: key for key, value in LABELS.items()}.get(label, LEGACY_LABELS.get(label, label))
     if key not in METHODS:
         raise ValueError('Choose a supported pitch extraction method. No fallback method was used.')
     return key
 
 
 def method_label(key):
-    return {'rmvpe-new': 'RMVPE New', 'fcpe-experimental': 'FCPE Experimental'}.get(key, key)
+    return LABELS.get(LEGACY_LABELS.get(key, key), key)
 
 
 def restored_method(preferences, current):
@@ -40,6 +44,9 @@ class VoiceDialog(wx.Dialog):
         self.choice('category', 'Voice category', CATEGORIES, voice.get('category', 'Other'))
         self.choice('usage', 'Usage type', USAGES, voice.get('usage', 'Unknown'))
         self.spin('pitch', 'Preferred pitch shift in semitones', -24, 24, prefs['pitch'])
+        note = wx.StaticText(panel, label=DEVICE_NOTE)
+        note.Wrap(520)
+        self.fields.Add(note, 0, wx.EXPAND | wx.ALL, 8)
         self.choice('method', 'Preferred pitch extraction', METHOD_LABELS,
                     method_label(restored_method(prefs, parent.method.GetStringSelection())))
         self.spin('index_rate', 'Preferred index influence percent', 0, 100, round(prefs['index_rate'] * 100))
